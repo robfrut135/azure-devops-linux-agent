@@ -17,21 +17,22 @@ function log_error(){
 
 function check_args(){
     log_info "validating arguments"
-    if [[ -z "${URL}" || -z "${TOKEN}" || -z "${POOL}" ]]; then
+    if [[ -z "${SYSTEM_USER}" || -z "${ORGANIZATION}" || -z "${TOKEN}" || -z "${POOL}" ]]; then
         usage
     fi
 }
 
 function usage() {
-    log_info "Usage: $0 -u <URL> -t <TOKEN> -p <POOL> -v <VERSION> -p <PATH>"
+    log_info "Usage: $0 -u <SYSTEM_USER> -o <ORGANIZATION> -t <TOKEN> -p <POOL> -v <VERSION> -p <PATH>"
     log_info ""
-    log_info "  URL (required):     Your organization URL. Example: https://dev.azure.com/CONTOSO-PARTNER/ "
-    log_info "  TOKEN (required):   Personal Access Token (PAT) to authenticate against Azure DevOps. Example: 09812y40yhjsdfhasjdhf"
-    log_info "  POOL (required):    Azure DevOps Pool name for associating this agent. "
-    log_info "  VERSION (optional): Agent version to download. By default: 2.173.0"
-    log_info "  PATH (optional):    Filesystem path to install Azure DevOps agent. By default: ${HOME}"
+    log_info "  SYSTEM_USER (required):   The system user to perform installation . Example: sysadmin "
+    log_info "  ORGANIZATION (required):  Your Azure DevOps organization URL. Example: https://dev.azure.com/CONTOSO-PARTNER/ "
+    log_info "  TOKEN (required):         Personal Access Token (PAT) to authenticate against Azure DevOps. Example: 09812y40yhjsdfhasjdhf"
+    log_info "  POOL (required):          Azure DevOps Pool name for associating this agent. "
+    log_info "  VERSION (optional):       Agent version to download. By default: 2.173.0"
+    log_info "  PATH (optional):          Filesystem path to install Azure DevOps agent. By default: ${HOME}"
     log_info ""
-    log_info "Example: $0 -u https://dev.azure.com/CONTOSO-PARTNER/ -t rdaSDY87AYDhAUSIDUHAJSHDasdasd -p my-pool"
+    log_info "Example: $0 -u admin -o https://dev.azure.com/CONTOSO-PARTNER/ -t rdaSDY87AYDhAUSIDUHAJSHDasdasd -p my-pool"
     log_error ""
 }
 
@@ -41,44 +42,52 @@ function parse_args(){
     while [[ $# -gt 0 ]]; do
         key="$1"
         case "$key" in
-            -u|--url)
+            -u|--user)
                 shift
-                URL="$1"
+                export SYSTEM_USER="$1"
             ;;
-            -u=*|--url=*)
-                URL="${key#*=}"
+            -u=*|--user=*)
+                export SYSTEM_USER="${key#*=}"
+            ;;
+
+            -o|--organization)
+                shift
+                export ORGANIZATION="$1"
+            ;;
+            -o=*|--organization=*)
+                export ORGANIZATION="${key#*=}"
             ;;
 
             -t|--token)
                 shift
-                TOKEN="$1"
+                export TOKEN="$1"
             ;;
             -t=*|--token=*)
-                TOKEN="${key#*=}"
+                export TOKEN="${key#*=}"
             ;;
 
             -p|--pool)
                 shift
-                POOL="$1"
+                export POOL="$1"
             ;;
             -p=*|--pool=*)
-                POOL="${key#*=}"
+                export POOL="${key#*=}"
             ;;
 
             -v|--version)
                 shift
-                VERSION="$1"
+                export VERSION="$1"
             ;;
             -v=*|--version=*)
-                VERSION="${key#*=}"
+                export VERSION="${key#*=}"
             ;;
 
             -p|--path)
                 shift
-                INSTALL_PATH="$1"
+                export INSTALL_PATH="$1"
             ;;
             -p=*|--path=*)
-                INSTALL_PATH="${key#*=}"
+                export INSTALL_PATH="${key#*=}"
             ;;
 
             *)
@@ -93,22 +102,22 @@ log_info "INIT"
 parse_args "$@"
 check_args
 
-VERSION=${VERSION:-"2.173.0"}
-FILE_NAME="vsts-agent-linux-x64-${VERSION}.tar.gz"
-INSTALL_PATH=${INSTALL_PATH:-"${HOME}/az-devops-agent"}
+export VERSION=${VERSION:-"2.173.0"}
+export FILE_NAME="vsts-agent-linux-x64-${VERSION}.tar.gz"
+export INSTALL_PATH=${INSTALL_PATH:-"/opt/az-devops-agent"}
 
 log_info "updating system repositories"
-sudo apt-get update -y
+apt-get update -y
 
 log_info "installing core packages"
-sudo apt-get install build-essential zip -y
+apt-get install build-essential zip -y
 
 log_info "checking current installation"
 if [[ -f ${INSTALL_PATH}/svc.sh ]]; then
     cd ${INSTALL_PATH}
     sudo ./svc.sh stop
     sudo ./svc.sh uninstall
-    ./config.sh remove --auth PAT --token ${TOKEN}
+    su -p ${SYSTEM_USER} -c 'cd ${INSTALL_PATH} && ./config.sh remove --auth PAT --token ${TOKEN}'
     cd ${HOME}
     rm -rf ${INSTALL_PATH}
 fi
@@ -120,14 +129,15 @@ cd ${INSTALL_PATH}
 log_info "downloading Azure DevOps agent package"
 wget https://vstsagentpackage.azureedge.net/agent/${VERSION}/${FILE_NAME}
 tar zxvf ${FILE_NAME} -C ${INSTALL_PATH}
+chown -R ${SYSTEM_USER} ${INSTALL_PATH}
 
 log_info "configuring Azure DevOps agent"
-./config.sh --url ${URL} --pool ${POOL} --agent ${HOSTNAME} --auth PAT --token ${TOKEN} --acceptTeeEula --unattended
+su -p ${SYSTEM_USER} -c 'cd ${INSTALL_PATH} && ./config.sh --url ${ORGANIZATION} --pool ${POOL} --agent ${HOSTNAME} --auth PAT --token ${TOKEN} --acceptTeeEula --unattended --runAsAutoLogon'
 
 log_info "install Azure DevOps agent system service"
-sudo ./svc.sh install
+./svc.sh install
 
 log_info "starting Azure DevOps agent"
-sudo ./svc.sh start
+./svc.sh start
 
 log_info "END"
