@@ -112,7 +112,7 @@ apt-get update -y
 log_info "installing core packages"
 apt-get install build-essential zip -y
 
-log_info "installing pip"
+log_info "installing pip3"
 apt-get install python3-pip -y
 
 log_info "checking current installation"
