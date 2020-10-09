@@ -115,6 +115,13 @@ apt-get install build-essential zip -y
 log_info "installing pip3"
 apt-get install python3-pip -y
 
+log_info "installing PowerShell"
+wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb
+dpkg -i packages-microsoft-prod.deb
+apt-get update
+add-apt-repository universe
+apt-get install -y powershell
+
 log_info "checking current installation"
 if [[ -f ${INSTALL_PATH}/svc.sh ]]; then
     cd ${INSTALL_PATH}
