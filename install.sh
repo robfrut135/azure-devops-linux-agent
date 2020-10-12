@@ -131,6 +131,7 @@ apt-cache policy docker-ce
 apt-get install docker-ce -y
 systemctl status docker
 usermod -aG docker ${SYSTEM_USER}
+docker version
 
 log_info "checking current installation"
 if [[ -f ${INSTALL_PATH}/svc.sh ]]; then
